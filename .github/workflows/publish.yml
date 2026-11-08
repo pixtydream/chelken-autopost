@@ -1,0 +1,41 @@
+name: インスタに投稿する
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # 30分ごとに、投稿時刻を過ぎた承認済みの投稿がないか見る
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 にすると投稿せずに確認だけする"
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-write
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 投稿する
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+        run: python scripts/post.py
+      - name: 投稿済みの記録を残す
+        run: |
+          git config user.name "chelken-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posts
+          git diff --cached --quiet && exit 0
+          git commit -m "投稿済みを記録"
+          git pull --rebase
+          git push
